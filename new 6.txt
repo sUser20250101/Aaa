@@ -1,0 +1,66 @@
+private static class SimpleOutputFile implements OutputFile {
+        private final String path;
+
+        public SimpleOutputFile(String path) {
+            this.path = path;
+        }
+
+        @Override
+        public PositionOutputStream create(long blockSizeHint) throws IOException {
+            return new SimplePositionOutputStream(new FileOutputStream(path));
+        }
+
+        @Override
+        public PositionOutputStream createOrOverwrite(long blockSizeHint) throws IOException {
+            return new SimplePositionOutputStream(new FileOutputStream(path));
+        }
+
+        @Override
+        public boolean supportsBlockSize() {
+            return false;
+        }
+
+        @Override
+        public long defaultBlockSize() {
+            return 0;
+        }
+
+        @Override
+        public String toString() {
+            return path;
+        }
+    }
+
+    /**
+     * Simple PositionOutputStream for local file system
+     */
+    private static class SimplePositionOutputStream extends PositionOutputStream {
+        private final OutputStream outputStream;
+        private long position = 0;
+
+        public SimplePositionOutputStream(OutputStream outputStream) {
+            this.outputStream = outputStream;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            outputStream.write(b);
+            position++;
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            outputStream.write(b, off, len);
+            position += len;
+        }
+
+        @Override
+        public long getPos() {
+            return position;
+        }
+
+        @Override
+        public void close() throws IOException {
+            outputStream.close();
+        }
+    }
