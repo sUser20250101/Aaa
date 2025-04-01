@@ -1,0 +1,226 @@
+DocumentDBConfig.java
+package com.example.documentdb.config;
+
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class DocumentDBConfig {
+
+    @Bean
+    public MongoClient mongoClient() {
+        // Set truststore for TLS/SSL
+        System.setProperty("javax.net.ssl.trustStore", "C:\\certs\\my-truststore.jks");
+        System.setProperty("javax.net.ssl.trustStorePassword", "changeit");
+
+        // Connection string with TLS enabled
+        String connectionString = "mongodb://<username>:<password>@<cluster-endpoint>:27017/?ssl=true&retryWrites=false";
+
+        MongoClientSettings settings = MongoClientSettings.builder()
+                .applyConnectionString(new ConnectionString(connectionString))
+                .build();
+
+        return MongoClients.create(settings);
+    }
+}
+
+User.java
+package com.example.documentdb.model;
+
+import org.bson.types.ObjectId;
+
+public class User {
+    private ObjectId id;
+    private String name;
+    private int age;
+    private String email;
+
+    // Constructors
+    public User() {}
+
+    public User(String name, int age, String email) {
+        this.name = name;
+        this.age = age;
+        this.email = email;
+    }
+
+    // Getters & Setters
+    public ObjectId getId() { return id; }
+    public void setId(ObjectId id) { this.id = id; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public int getAge() { return age; }
+    public void setAge(int age) { this.age = age; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+}
+
+
+
+UserRepository.java
+package com.example.documentdb.repository;
+
+import com.example.documentdb.model.User;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
+import org.bson.Document;
+import org.bson.types.ObjectId;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public class UserRepository {
+    private final MongoCollection<Document> collection;
+
+    @Autowired
+    public UserRepository(MongoClient mongoClient) {
+        MongoDatabase database = mongoClient.getDatabase("testdb");
+        this.collection = database.getCollection("users");
+    }
+
+    // Insert a user into the database
+    public void saveUser(User user) {
+        Document document = new Document("name", user.getName())
+                .append("age", user.getAge())
+                .append("email", user.getEmail());
+        collection.insertOne(document);
+    }
+
+    // Find a user by ID
+    public User findUserById(String id) {
+        Document document = collection.find(new Document("_id", new ObjectId(id))).first();
+        if (document != null) {
+            return new User(document.getString("name"), document.getInteger("age"), document.getString("email"));
+        }
+        return null;
+    }
+}
+
+
+UserService
+package com.example.documentdb.service;
+
+import com.example.documentdb.model.User;
+import com.example.documentdb.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+@Service
+public class UserService {
+    private final UserRepository userRepository;
+
+    @Autowired
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public void addUser(User user) {
+        userRepository.saveUser(user);
+    }
+
+    public User getUser(String id) {
+        return userRepository.findUserById(id);
+    }
+}
+
+
+DocumentDBApplication
+package com.example.documentdb.main;
+
+import com.example.documentdb.model.User;
+import com.example.documentdb.service.UserService;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.ComponentScan;
+
+@SpringBootApplication
+@ComponentScan("com.example.documentdb")
+public class DocumentDBApplication implements CommandLineRunner {
+
+    private final UserService userService;
+
+    public DocumentDBApplication(UserService userService) {
+        this.userService = userService;
+    }
+
+    public static void main(String[] args) {
+        ApplicationContext context = SpringApplication.run(DocumentDBApplication.class, args);
+    }
+
+    @Override
+    public void run(String... args) throws Exception {
+        User newUser = new User("Salim", 30, "salim@example.com");
+        userService.addUser(newUser);
+        System.out.println("User added successfully!");
+    }
+}
+
+
+
+Convert .pem to Java Keystore (.jks)
+keytool -import -trustcacerts -keystore C:\certs\my-truststore.jks -storepass changeit -file rds-combined-ca-bundle.pem -alias "rds-ca"
+
+
+
+Ensure the correct truststore path in DocumentDBConfig.java
+System.setProperty("javax.net.ssl.trustStore", "C:\\certs\\my-truststore.jks");
+System.setProperty("javax.net.ssl.trustStorePassword", "changeit");
+
+Reader
+package com.example.documentdb;
+
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.MongoIterable;
+
+import java.util.List;
+
+public class DocumentDBReader {
+
+    public static void main(String[] args) {
+        // Set Java Keystore properties for TLS
+        System.setProperty("javax.net.ssl.trustStore", "C:\\certs\\my-truststore.jks");
+        System.setProperty("javax.net.ssl.trustStorePassword", "changeit");
+
+        // Amazon DocumentDB Connection String (TLS enabled)
+        String connectionString = "mongodb://<username>:<password>@<cluster-endpoint>:27017/?ssl=true&retryWrites=false";
+
+        // Configure MongoDB Client with TLS
+        MongoClientSettings settings = MongoClientSettings.builder()
+                .applyConnectionString(new ConnectionString(connectionString))
+                .build();
+
+        try (MongoClient mongoClient = MongoClients.create(settings)) {
+            // List all databases
+            MongoIterable<String> databases = mongoClient.listDatabaseNames();
+            System.out.println("Databases in the cluster:");
+
+            for (String dbName : databases) {
+                System.out.println("📂 Database: " + dbName);
+                MongoDatabase database = mongoClient.getDatabase(dbName);
+
+                // List all collections in the database
+                MongoIterable<String> collections = database.listCollectionNames();
+                for (String collectionName : collections) {
+                    System.out.println("  📄 Collection: " + collectionName);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
