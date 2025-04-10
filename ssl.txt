@@ -1,0 +1,30 @@
+private static MongoClient createMongoClient() {
+        try {
+            String connectionString = String.format(
+                "mongodb://%s:%s@%s:%s/?tls=true",
+                USERNAME, PASSWORD, HOST, PORT
+            );
+
+            // Setup SSL context (Amazon requires TLS + their cert)
+            CertificateFactory factory = CertificateFactory.getInstance("X.509");
+            FileInputStream fis = new FileInputStream(CERT_PATH);
+            X509Certificate cert = (X509Certificate) factory.generateCertificate(fis);
+
+            KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+            keyStore.load(null, null);
+            keyStore.setCertificateEntry("aws-docdb", cert);
+
+            // Use default TrustManager
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, null, null);
+
+            MongoClientSettings settings = MongoClientSettings.builder()
+                .applyConnectionString(new ConnectionString(connectionString))
+                .applyToSslSettings(builder -> builder.enabled(true).context(sslContext))
+                .build();
+
+            return MongoClients.create(settings);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to connect to AWS DocumentDB", e);
+        }
+    }
