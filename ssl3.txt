@@ -1,0 +1,40 @@
+@Bean
+public static MongoClient mongoClient() {
+    try {
+        String connectionString = String.format(
+            "mongodb://%s:%s@%s:%s/?ssl=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false",
+            USERNAME, PASSWORD, HOST, PORT
+        );
+
+        // Load the CA certificate
+        CertificateFactory factory = CertificateFactory.getInstance("X.509");
+        try (FileInputStream fis = new FileInputStream(CERT_PATH)) {
+            X509Certificate cert = (X509Certificate) factory.generateCertificate(fis);
+
+            // Create a KeyStore containing our trusted cert
+            KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+            keyStore.load(null, null);
+            keyStore.setCertificateEntry("aws-docdb", cert);
+
+            // Create a TrustManager that trusts the cert in our KeyStore
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(keyStore);
+
+            // Create SSLContext with our TrustManager
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, tmf.getTrustManagers(), null);
+
+            MongoClientSettings settings = MongoClientSettings.builder()
+                .applyConnectionString(new ConnectionString(connectionString))
+                .applyToSslSettings(builder -> builder
+                    .enabled(true)
+                    .context(sslContext)
+                    .invalidHostNameAllowed(true)) // Required for DocumentDB
+                .build();
+
+            return MongoClients.create(settings);
+        }
+    } catch (Exception e) {
+        throw new RuntimeException("Failed to connect to AWS DocumentDB", e);
+    }
+}
