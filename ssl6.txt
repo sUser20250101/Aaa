@@ -1,0 +1,122 @@
+public MongoClient mongoClient() {
+        try {
+            // 1. Load all certificates from the PEM bundle
+            List<X509Certificate> trustedCerts = loadCertificates(caCertPath);
+            
+            // 2. Configure SSL with revocation checking disabled
+            SSLContext sslContext = createSSLContext(trustedCerts);
+            
+            // 3. Build MongoClient settings
+            MongoClientSettings settings = MongoClientSettings.builder()
+                .applyConnectionString(new ConnectionString(mongoUri))
+                .applyToSslSettings(builder -> builder
+                    .enabled(true)
+                    .context(sslContext)
+                    .invalidHostNameAllowed(allowInvalidHostname))
+                .build();
+            
+            return MongoClients.create(settings);
+            
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize MongoDB connection", e);
+        }
+    }
+
+    private List<X509Certificate> loadCertificates(String certPath) throws Exception {
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        List<X509Certificate> certs = new ArrayList<>();
+        
+        try (InputStream is = new FileInputStream(certPath)) {
+            while (is.available() > 0) {
+                certs.add((X509Certificate) cf.generateCertificate(is));
+            }
+        }
+        return certs;
+    }
+
+    private SSLContext createSSLContext(List<X509Certificate> trustedCerts) throws Exception {
+        // Create trust store
+        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        trustStore.load(null, null);
+        
+        for (int i = 0; i < trustedCerts.size(); i++) {
+            trustStore.setCertificateEntry("docdb-cert-" + i, trustedCerts.get(i));
+        }
+        
+        // Configure trust manager with revocation disabled
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(trustStore);
+        
+        // Create PKIX parameters with revocation checking disabled
+        PKIXParameters pkixParams = new PKIXParameters(trustStore);
+        pkixParams.setRevocationEnabled(false);
+        
+        // Create custom trust manager
+        X509TrustManager customTrustManager = new X509TrustManager() {
+            private final X509TrustManager defaultTrustManager = (X509TrustManager) tmf.getTrustManagers()[0];
+            
+            public X509Certificate[] getAcceptedIssuers() {
+                return defaultTrustManager.getAcceptedIssuers();
+            }
+            
+            public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                defaultTrustManager.checkClientTrusted(chain, authType);
+            }
+            
+            public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                try {
+                    // Try standard validation first
+                    CertPathValidator validator = CertPathValidator.getInstance("PKIX");
+                    CertPath path = CertificateFactory.getInstance("X.509")
+                        .generateCertPath(Arrays.asList(chain));
+                    validator.validate(path, pkixParams);
+                } catch (Exception e) {
+                    System.err.println("Certificate validation failed: " + e.getMessage());
+                    // Fall back to manual verification
+                    verifyChainManually(chain, trustedCerts);
+                }
+            }
+        };
+        
+        // Initialize SSL context
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(null, new TrustManager[]{customTrustManager}, new SecureRandom());
+        
+        return sslContext;
+    }
+
+    private void verifyChainManually(X509Certificate[] chain, List<X509Certificate> trustedCerts) 
+            throws CertificateException {
+        
+        System.out.println("Attempting manual certificate verification...");
+        
+        // 1. Check if any certificate in the chain is directly trusted
+        for (X509Certificate cert : chain) {
+            if (isCertificateTrusted(cert, trustedCerts)) {
+                System.out.println("Found directly trusted certificate: " + cert.getSubjectX500Principal());
+                return;
+            }
+        }
+        
+        // 2. Check if chain can be built to trusted certs
+        for (X509Certificate cert : chain) {
+            for (X509Certificate trustedCert : trustedCerts) {
+                try {
+                    cert.verify(trustedCert.getPublicKey());
+                    System.out.println("Verified chain to trusted root: " + 
+                            trustedCert.getSubjectX500Principal());
+                    return;
+                } catch (Exception e) {
+                    // Continue checking
+                }
+            }
+        }
+        
+        throw new CertificateException("Failed to establish trust path to any trusted certificate");
+    }
+    
+    private boolean isCertificateTrusted(X509Certificate cert, List<X509Certificate> trustedCerts) {
+        return trustedCerts.stream().anyMatch(trustedCert -> 
+            trustedCert.getSubjectX500Principal().equals(cert.getSubjectX500Principal()) &&
+            trustedCert.getSerialNumber().equals(cert.getSerialNumber()));
+    }
