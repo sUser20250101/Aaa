@@ -1,0 +1,62 @@
+public MongoClient mongoClient() throws Exception {
+        SSLContext sslContext = createSslContext();
+        
+        MongoClientSettings settings = MongoClientSettings.builder()
+            .applyConnectionString(new ConnectionString(mongoUri))
+            .applyToSslSettings(builder -> builder
+                .enabled(true)
+                .context(sslContext)
+                .invalidHostNameAllowed(true))
+            .build();
+
+        return MongoClients.create(settings);
+    }
+
+    private SSLContext createSslContext() throws Exception {
+        // 1. Load CA certificate
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        X509Certificate cert;
+        try (InputStream is = new ClassPathResource(caCertPath).getInputStream()) {
+            cert = (X509Certificate) cf.generateCertificate(is);
+        }
+
+        // 2. Create trust store
+        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        trustStore.load(null, null);
+        trustStore.setCertificateEntry("docdb-ca", cert);
+
+        // 3. Configure PKIX parameters with revocation disabled
+        PKIXParameters pkixParams = new PKIXParameters(trustStore);
+        pkixParams.setRevocationEnabled(false);  // Critical for DocumentDB
+        
+        // 4. Create trust manager
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(trustStore);
+        
+        // 5. Create custom trust manager that uses our PKIX parameters
+        X509TrustManager customTm = new X509TrustManager() {
+            private final X509TrustManager defaultTm = (X509TrustManager)tmf.getTrustManagers()[0];
+            
+            public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+            
+            public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                try {
+                    CertPathValidator validator = CertPathValidator.getInstance("PKIX");
+                    CertPath path = cf.generateCertPath(Collections.singletonList(chain[0]));
+                    validator.validate(path, pkixParams);
+                } catch (Exception e) {
+                    defaultTm.checkServerTrusted(chain, authType); // Fallback
+                }
+            }
+            
+            public X509Certificate[] getAcceptedIssuers() {
+                return defaultTm.getAcceptedIssuers();
+            }
+        };
+
+        // 6. Initialize SSL context
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(null, new TrustManager[]{customTm}, new SecureRandom());
+        
+        return sslContext;
+    }
