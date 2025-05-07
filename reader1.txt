@@ -1,0 +1,88 @@
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.hadoop.ParquetReader;
+
+public class S3ParquetReader {
+
+    public static void main(String[] args) {
+        String s3Path = "s3a://your-bucket-name/path/to/your-file.parquet";
+
+        try {
+            Configuration conf = createHadoopS3Config(
+                    "your-access-key",
+                    "your-secret-key",
+                    "s3.amazonaws.com"
+            );
+
+            readParquetFromS3(s3Path, conf);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Creates Hadoop Configuration for reading from S3.
+     */
+    private static Configuration createHadoopS3Config(String accessKey, String secretKey, String endpoint) {
+        Configuration conf = new Configuration();
+        conf.set("fs.s3a.access.key", accessKey);
+        conf.set("fs.s3a.secret.key", secretKey);
+        conf.set("fs.s3a.endpoint", endpoint);
+        conf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+        conf.set("fs.s3a.path.style.access", "true");
+        return conf;
+    }
+
+    /**
+     * Reads a Parquet file from S3 using the provided Hadoop Configuration.
+     */
+    private static void readParquetFromS3(String s3Path, Configuration conf) throws Exception {
+        Path path = new Path(s3Path);
+        try (ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(path).withConf(conf).build()) {
+            GenericRecord record;
+            while ((record = reader.read()) != null) {
+                System.out.println(record);
+            }
+        }
+    }
+}
+
+<!-- Hadoop AWS integration -->
+<dependency>
+    <groupId>org.apache.hadoop</groupId>
+    <artifactId>hadoop-aws</artifactId>
+    <version>3.3.6</version>
+</dependency>
+
+<!-- AWS SDK for credentials (used by Hadoop) -->
+<dependency>
+    <groupId>com.amazonaws</groupId>
+    <artifactId>aws-java-sdk-bundle</artifactId>
+    <version>1.12.651</version>
+</dependency>
+
+
+
+public class ParquetFileReaderExample {
+    public static void main(String[] args) throws Exception {
+        String filePath = "your-parquet-file.parquet";
+
+        Path path = new Path(filePath);
+        try (ParquetReader<GenericRecord> reader =
+                     AvroParquetReader.<GenericRecord>builder(path)
+                             .withConf(new Configuration())
+                             .build()) {
+
+            GenericRecord record;
+            while ((record = reader.read()) != null) {
+                System.out.println(record);
+            }
+ }
+}
+
+
+
+
+
