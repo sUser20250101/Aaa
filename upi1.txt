@@ -1,0 +1,60 @@
+public record Person(
+    String transaction_id,
+    String first_name,
+    String last_name,
+    String middle_name,
+    String suffix,
+    String address_line1,
+    String address_line2,
+    String city,
+    String state,
+    String zip_code,
+    String dob,
+    String ssn,
+    String gender,
+    String email,
+    String phone_number,
+    String mm,
+    String subscriber_id,
+    String oeidp_id,
+    String upi,
+    String return_code,
+    String match_score
+) {}
+
+public class GenericRecordMapper {
+
+    public static Person mapToPerson(GenericRecord record) {
+        return new Person(
+            getString(record, "transaction_id"),
+            getString(record, "first_name"),
+            getString(record, "last_name"),
+            getString(record, "middle_name"),
+            getString(record, "suffix"),
+            getString(record, "address_line1"),
+            getString(record, "address_line2"),
+            getString(record, "city"),
+            getString(record, "state"),
+            getString(record, "zip_code"),
+            getString(record, "dob"),
+            getString(record, "ssn"),
+            getString(record, "gender"),
+            getString(record, "email"),
+            getString(record, "phone_number"),
+            getString(record, "mm"),
+            getString(record, "subscriber_id"),
+            getString(record, "oeidp_id"),
+            getString(record, "upi"),
+            getString(record, "return_code"),
+            getString(record, "match_score")
+        );
+    }
+
+    private static String getString(GenericRecord record, String fieldName) {
+        Object value = record.get(fieldName);
+        return value != null ? value.toString() : null;
+    }
+}
+
+
+Person person = GenericRecordMapper.mapToPerson(record);
