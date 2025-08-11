@@ -1,0 +1,32 @@
+# Fetch documents
+documents = list(collection.find({}, {"_id": 0}))  # Exclude _id or convert it to str
+
+# Define your schema explicitly
+schema = pa.schema([
+    ("field1", pa.string()),
+    ("field2", pa.int64()),
+    ("field3", pa.float64()),
+    ("created_at", pa.timestamp('ms')),
+    # Add more fields as needed
+])
+
+# Create DataFrame
+df = pd.DataFrame(documents)
+
+# Ensure data matches schema (convert if needed)
+df["created_at"] = pd.to_datetime(df["created_at"], errors='coerce')
+
+# Convert to Arrow Table with schema
+table = pa.Table.from_pandas(df, schema=schema, preserve_index=False)
+
+# Write to Parquet in-memory
+buffer = io.BytesIO()
+pq.write_table(table, buffer)
+
+# Upload to S3
+s3 = boto3.client("s3")
+s3.put_object(
+    Bucket="your-bucket-name",
+    Key="path/to/your_file.parquet",
+    Body=buffer.getvalue()
+)
