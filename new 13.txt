@@ -1,0 +1,47 @@
+import java.io.*;
+import java.nio.file.*;
+
+public class SplitLargeFileByLines {
+
+    public static void splitFile(String inputFilePath, int linesPerFile) throws IOException {
+        Path inputPath = Paths.get(inputFilePath);
+        String fileName = inputPath.getFileName().toString();
+        String parentDir = inputPath.getParent() != null ? inputPath.getParent().toString() : ".";
+
+        try (BufferedReader reader = Files.newBufferedReader(inputPath)) {
+            int fileCounter = 1;
+            int lineCounter = 0;
+
+            BufferedWriter writer = null;
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                if (lineCounter % linesPerFile == 0) {
+                    // Close previous writer (if open)
+                    if (writer != null) {
+                        writer.close();
+                    }
+
+                    // Create new file
+                    String newFileName = String.format("%s/part_%03d_%s", parentDir, fileCounter++, fileName);
+                    writer = Files.newBufferedWriter(Paths.get(newFileName));
+                    System.out.println("Created: " + newFileName);
+                }
+
+                writer.write(line);
+                writer.newLine();
+                lineCounter++;
+            }
+
+            if (writer != null) {
+                writer.close();
+            }
+        }
+    }
+
+    public static void main(String[] args) throws IOException {
+        String inputFile = "C:/data/large-file.txt";
+        int linesPerFile = 30000; // split into 30k line files
+        splitFile(inputFile, linesPerFile);
+    }
+}
