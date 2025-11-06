@@ -1,0 +1,27 @@
+# Service definition (ClusterIP)
+name: "standardization"
+type: "ClusterIP"
+ports:
+  - name: "http2"
+    port: 50051
+    protocol: "TCP"
+selector:
+  app: "standardization"
+
+---
+
+# Ingress to expose the service externally via public ALB
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: "standardization-ingress"
+  namespace: uim-dev
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+spec:
+  defaultBackend:
+    service:
+      name: "standardization"
+      port:
+        number: 50051
