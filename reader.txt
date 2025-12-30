@@ -1,0 +1,50 @@
+public static class SeekableByteArrayInputStream extends SeekableInputStream {
+        private final ByteArrayInputStream byteArrayInputStream;
+        private long position;
+
+        public SeekableByteArrayInputStream(byte[] data) {
+            this.byteArrayInputStream = new ByteArrayInputStream(data);
+            this.position = 0;
+        }
+
+        @Override
+        public long getPos() throws IOException {
+            return position;
+        }
+
+        @Override
+        public void seek(long newPos) throws IOException {
+            if (newPos < 0 || newPos > byteArrayInputStream.available()) {
+                throw new IOException("Seek position out of bounds");
+            }
+            byteArrayInputStream.reset();
+            byteArrayInputStream.skip(newPos);
+            position = newPos;
+        }
+
+        @Override
+        public int read() throws IOException {
+            int byteRead = byteArrayInputStream.read();
+            if (byteRead != -1) {
+                position++;
+            }
+            return byteRead;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            int bytesRead = byteArrayInputStream.read(b, off, len);
+            if (bytesRead != -1) {
+                position += bytesRead;
+            }
+            return bytesRead;
+        }
+
+        @Override
+        public void readFully(byte[] buffer) throws IOException {
+            int bytesRead = byteArrayInputStream.read(buffer, 0, buffer.length);
+            if (bytesRead != buffer.length) {
+                throw new IOException("Not enough bytes read. Expected " + buffer.length + " bytes.");
+            }
+            position += bytesRead;
+        }
