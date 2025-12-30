@@ -1,0 +1,79 @@
+public class SeekableByteArrayInputStream extends SeekableInputStream {
+    private final ByteArrayInputStream byteArrayInputStream;
+    private long position;
+
+    public SeekableByteArrayInputStream(byte[] data) {
+        this.byteArrayInputStream = new ByteArrayInputStream(data);
+        this.position = 0;
+    }
+
+    @Override
+    public long getPos() throws IOException {
+        return position;
+    }
+
+    @Override
+    public void seek(long newPos) throws IOException {
+        if (newPos < 0 || newPos > byteArrayInputStream.available()) {
+            throw new IOException("Seek position out of bounds");
+        }
+        byteArrayInputStream.reset();
+        byteArrayInputStream.skip(newPos);
+        position = newPos;
+    }
+
+    @Override
+    public int read() throws IOException {
+        int byteRead = byteArrayInputStream.read();
+        if (byteRead != -1) {
+            position++;
+        }
+        return byteRead;
+    }
+
+    @Override
+    public int read(byte[] b, int off, int len) throws IOException {
+        int bytesRead = byteArrayInputStream.read(b, off, len);
+        if (bytesRead != -1) {
+            position += bytesRead;
+        }
+        return bytesRead;
+    }
+
+    @Override
+    public int read(ByteBuffer buf) throws IOException {
+        int bytesRead = byteArrayInputStream.read(buf.array(), buf.position(), buf.remaining());
+        if (bytesRead != -1) {
+            buf.position(buf.position() + bytesRead);
+            position += bytesRead;
+        }
+        return bytesRead;
+    }
+
+    @Override
+    public void readFully(byte[] bytes) throws IOException {
+        int bytesRead = byteArrayInputStream.read(bytes, 0, bytes.length);
+        if (bytesRead != bytes.length) {
+            throw new IOException("Not enough bytes read. Expected " + bytes.length + " bytes.");
+        }
+        position += bytesRead;
+    }
+
+    @Override
+    public void readFully(byte[] bytes, int start, int len) throws IOException {
+        int bytesRead = byteArrayInputStream.read(bytes, start, len);
+        if (bytesRead != len) {
+            throw new IOException("Not enough bytes read. Expected " + len + " bytes.");
+        }
+        position += bytesRead;
+    }
+
+    @Override
+    public void readFully(ByteBuffer buf) throws IOException {
+        int bytesRead = byteArrayInputStream.read(buf.array(), buf.position(), buf.remaining());
+        if (bytesRead != buf.remaining()) {
+            throw new IOException("Not enough bytes read. Expected " + buf.remaining() + " bytes.");
+        }
+        buf.position(buf.position() + bytesRead);
+        position += bytesRead;
+    }
