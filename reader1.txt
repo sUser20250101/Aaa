@@ -1,88 +1,79 @@
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.parquet.avro.AvroParquetReader;
-import org.apache.parquet.hadoop.ParquetReader;
+public class SeekableByteArrayInputStream extends SeekableInputStream {
+    private final ByteArrayInputStream byteArrayInputStream;
+    private long position;
 
-public class S3ParquetReader {
+    public SeekableByteArrayInputStream(byte[] data) {
+        this.byteArrayInputStream = new ByteArrayInputStream(data);
+        this.position = 0;
+    }
 
-    public static void main(String[] args) {
-        String s3Path = "s3a://your-bucket-name/path/to/your-file.parquet";
+    @Override
+    public long getPos() throws IOException {
+        return position;
+    }
 
-        try {
-            Configuration conf = createHadoopS3Config(
-                    "your-access-key",
-                    "your-secret-key",
-                    "s3.amazonaws.com"
-            );
-
-            readParquetFromS3(s3Path, conf);
-        } catch (Exception e) {
-            e.printStackTrace();
+    @Override
+    public void seek(long newPos) throws IOException {
+        if (newPos < 0 || newPos > byteArrayInputStream.available()) {
+            throw new IOException("Seek position out of bounds");
         }
+        byteArrayInputStream.reset();
+        byteArrayInputStream.skip(newPos);
+        position = newPos;
     }
 
-    /**
-     * Creates Hadoop Configuration for reading from S3.
-     */
-    private static Configuration createHadoopS3Config(String accessKey, String secretKey, String endpoint) {
-        Configuration conf = new Configuration();
-        conf.set("fs.s3a.access.key", accessKey);
-        conf.set("fs.s3a.secret.key", secretKey);
-        conf.set("fs.s3a.endpoint", endpoint);
-        conf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
-        conf.set("fs.s3a.path.style.access", "true");
-        return conf;
-    }
-
-    /**
-     * Reads a Parquet file from S3 using the provided Hadoop Configuration.
-     */
-    private static void readParquetFromS3(String s3Path, Configuration conf) throws Exception {
-        Path path = new Path(s3Path);
-        try (ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(path).withConf(conf).build()) {
-            GenericRecord record;
-            while ((record = reader.read()) != null) {
-                System.out.println(record);
-            }
+    @Override
+    public int read() throws IOException {
+        int byteRead = byteArrayInputStream.read();
+        if (byteRead != -1) {
+            position++;
         }
+        return byteRead;
     }
-}
 
-<!-- Hadoop AWS integration -->
-<dependency>
-    <groupId>org.apache.hadoop</groupId>
-    <artifactId>hadoop-aws</artifactId>
-    <version>3.3.6</version>
-</dependency>
+    @Override
+    public int read(byte[] b, int off, int len) throws IOException {
+        int bytesRead = byteArrayInputStream.read(b, off, len);
+        if (bytesRead != -1) {
+            position += bytesRead;
+        }
+        return bytesRead;
+    }
 
-<!-- AWS SDK for credentials (used by Hadoop) -->
-<dependency>
-    <groupId>com.amazonaws</groupId>
-    <artifactId>aws-java-sdk-bundle</artifactId>
-    <version>1.12.651</version>
-</dependency>
+    @Override
+    public int read(ByteBuffer buf) throws IOException {
+        int bytesRead = byteArrayInputStream.read(buf.array(), buf.position(), buf.remaining());
+        if (bytesRead != -1) {
+            buf.position(buf.position() + bytesRead);
+            position += bytesRead;
+        }
+        return bytesRead;
+    }
 
+    @Override
+    public void readFully(byte[] bytes) throws IOException {
+        int bytesRead = byteArrayInputStream.read(bytes, 0, bytes.length);
+        if (bytesRead != bytes.length) {
+            throw new IOException("Not enough bytes read. Expected " + bytes.length + " bytes.");
+        }
+        position += bytesRead;
+    }
 
+    @Override
+    public void readFully(byte[] bytes, int start, int len) throws IOException {
+        int bytesRead = byteArrayInputStream.read(bytes, start, len);
+        if (bytesRead != len) {
+            throw new IOException("Not enough bytes read. Expected " + len + " bytes.");
+        }
+        position += bytesRead;
+    }
 
-public class ParquetFileReaderExample {
-    public static void main(String[] args) throws Exception {
-        String filePath = "your-parquet-file.parquet";
-
-        Path path = new Path(filePath);
-        try (ParquetReader<GenericRecord> reader =
-                     AvroParquetReader.<GenericRecord>builder(path)
-                             .withConf(new Configuration())
-                             .build()) {
-
-            GenericRecord record;
-            while ((record = reader.read()) != null) {
-                System.out.println(record);
-            }
- }
-}
-
-
-
-
-
+    @Override
+    public void readFully(ByteBuffer buf) throws IOException {
+        int bytesRead = byteArrayInputStream.read(buf.array(), buf.position(), buf.remaining());
+        if (bytesRead != buf.remaining()) {
+            throw new IOException("Not enough bytes read. Expected " + buf.remaining() + " bytes.");
+        }
+        buf.position(buf.position() + bytesRead);
+        position += bytesRead;
+    }
